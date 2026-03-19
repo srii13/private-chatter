@@ -23,7 +23,8 @@ export default function ChatList() {
     const searchTimer = setTimeout(async () => {
       try {
         setIsSearching(true);
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/users/search?q=${searchQuery}`);
+        const API_URL = import.meta.env.PROD ? '' : import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        const res = await fetch(`${API_URL}/api/auth/users/search?q=${searchQuery}`);
         const data = await res.json();
         setSearchResults(data.filter(u => u.id !== user.id)); // filter out self
       } catch (err) {

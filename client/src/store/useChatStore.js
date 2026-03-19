@@ -18,7 +18,8 @@ export const useChatStore = create((set, get) => ({
     if (!user) return;
 
     if (!socket) {
-      socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+      const API_URL = import.meta.env.PROD ? '' : import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      socket = io(API_URL, {
         withCredentials: true
       });
 
