@@ -21,7 +21,7 @@ export default function ChatDashboard() {
   }, [user, initSocket, disconnectSocket]);
 
   return (
-    <div className="h-screen w-full bg-black text-white flex overflow-hidden">
+    <div className="h-[100dvh] w-full bg-black text-white flex overflow-hidden">
       {/* Background glow effects */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-instagram-blue/10 rounded-full blur-[150px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[150px] pointer-events-none" />

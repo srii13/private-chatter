@@ -1,7 +1,31 @@
 import { create } from 'zustand';
 import { io } from 'socket.io-client';
+import toast from 'react-hot-toast';
 import { useAuthStore } from './useAuthStore';
 import { encryptMessage, decryptMessage } from '../utils/crypto';
+
+// Notification AudioContext helper
+const playNotificationSound = () => {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+    oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+    
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+    
+    oscillator.start(audioCtx.currentTime);
+    oscillator.stop(audioCtx.currentTime + 0.3);
+  } catch(e) { console.error(e) }
+};
 
 let socket = null;
 
@@ -58,19 +82,25 @@ export const useChatStore = create((set, get) => ({
         // Notification logic
         const authUser = useAuthStore.getState().user;
         if (authUser && message.sender_id !== authUser.id) {
-          if ('Notification' in window && Notification.permission === 'granted') {
-            const isWindowFocused = document.hasFocus();
-            const isCurrentChat = activeConversation && activeConversation.id === convId;
+          const isWindowFocused = document.hasFocus();
+          const isCurrentChat = activeConversation && activeConversation.id === convId;
+          
+          if (!isWindowFocused || !isCurrentChat) {
+            const conv = get().conversations.find(c => c.id === convId);
+            const senderName = conv?.contact_username || 'Someone';
             
-            if (!isWindowFocused || !isCurrentChat) {
-              const conv = get().conversations.find(c => c.id === convId);
-              const senderName = conv?.contact_username || 'Someone';
-              
+            // In-app visual toast
+            toast(`New message from ${senderName}`, {
+              icon: '💬',
+            });
+            // Audio ding
+            playNotificationSound();
+            
+            // OS level notification if enabled
+            if ('Notification' in window && Notification.permission === 'granted') {
               const notification = new Notification('New Message', {
                 body: `${senderName} sent you a message`
               });
-              
-              // Optional: close it after a few seconds
               setTimeout(() => notification.close(), 5000);
             }
           }

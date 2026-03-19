@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/useAuthStore';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -18,7 +19,18 @@ function PublicRoute({ children }) {
 
 function App() {
   return (
-    <Routes>
+    <>
+      <Toaster 
+        position="top-center" 
+        toastOptions={{
+          style: {
+            background: '#333',
+            color: '#fff',
+            borderRadius: '10px',
+          }
+        }} 
+      />
+      <Routes>
       <Route 
         path="/login" 
         element={
@@ -44,6 +56,7 @@ function App() {
         } 
       />
     </Routes>
+    </>
   );
 }
 
