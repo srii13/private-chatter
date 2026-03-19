@@ -36,7 +36,8 @@ app.use('/api/auth', authRoutes);
 // Serve frontend in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
-  app.get('*', (req, res) => {
+  // Catch-all route for React Router (Express 5 safe)
+  app.use((req, res) => {
     res.sendFile(path.resolve(__dirname, '../client/dist', 'index.html'));
   });
 }
