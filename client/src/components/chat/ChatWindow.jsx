@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Image, Send, Lock, Smile, Phone, Video, Info, ChevronLeft } from 'lucide-react';
+import { Image, Send, Lock, Smile, Phone, Video, Info, ChevronLeft, Trash } from 'lucide-react';
 import { useChatStore } from '../../store/useChatStore';
 import { useAuthStore } from '../../store/useAuthStore';
 
@@ -9,7 +9,7 @@ export default function ChatWindow() {
   const messagesEndRef = useRef(null);
   
   const user = useAuthStore(state => state.user);
-  const { activeConversation, messages, sendMessage, sendTypingStatus, typingUsers, onlineUsers, setActiveConversation } = useChatStore();
+  const { activeConversation, messages, sendMessage, sendTypingStatus, typingUsers, onlineUsers, setActiveConversation, deleteMessage, deleteConversation } = useChatStore();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,9 +81,18 @@ export default function ChatWindow() {
         </div>
 
         <div className="flex items-center space-x-6 text-white/80">
-          <Phone className="w-6 h-6 hover:text-white cursor-pointer transition-colors" />
-          <Video className="w-7 h-7 hover:text-white cursor-pointer transition-colors" />
-          <Info className="w-6 h-6 hover:text-white cursor-pointer transition-colors" />
+          <Phone className="w-6 h-6 hover:text-white cursor-pointer transition-colors hidden sm:block" />
+          <Video className="w-7 h-7 hover:text-white cursor-pointer transition-colors hidden sm:block" />
+          <Trash 
+            className="w-5 h-5 hover:text-red-500 cursor-pointer transition-colors" 
+            title="Delete Conversation"
+            onClick={() => {
+              if(window.confirm('Delete this entire conversation?')) {
+                deleteConversation(activeConversation.id);
+              }
+            }}
+          />
+          <Info className="w-6 h-6 hover:text-white cursor-pointer transition-colors hidden sm:block" />
         </div>
       </div>
 
@@ -104,12 +113,22 @@ export default function ChatWindow() {
                 key={msg.id || i}
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${isMe ? 'justify-end' : 'justify-start'} group items-center`}
               >
                 {!isMe && (
                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-instagram-blue to-purple-600 flex items-center justify-center mb-1 mr-2 self-end text-[10px] font-bold shrink-0">
                      {activeConversation.contact_username.charAt(0).toUpperCase()}
                    </div>
+                )}
+                
+                {isMe && (
+                  <button 
+                    onClick={() => { if(window.confirm('Delete message?')) deleteMessage(msg.id) }}
+                    className="opacity-0 group-hover:opacity-100 mr-2 p-1.5 hover:bg-white/10 rounded-full transition-all text-white/50 hover:text-red-400"
+                    title="Delete Message"
+                  >
+                    <Trash className="w-4 h-4" />
+                  </button>
                 )}
                 
                 <div 

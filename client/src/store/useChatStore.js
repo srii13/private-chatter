@@ -52,6 +52,12 @@ export const useChatStore = create((set, get) => ({
         get().fetchConversations();
       });
 
+      socket.on('initial_status', (onlineUserIds) => {
+        const newOnlineState = { ...get().onlineUsers };
+        onlineUserIds.forEach(id => { newOnlineState[id] = true; });
+        set({ onlineUsers: newOnlineState });
+      });
+
       socket.on('user_status', ({ userId, online }) => {
         set(state => ({
           onlineUsers: { ...state.onlineUsers, [userId]: online }
@@ -59,12 +65,10 @@ export const useChatStore = create((set, get) => ({
       });
 
       socket.on('receive_message', (message) => {
-        const { activeConversation, processReceivedMessage, conversations } = get();
+        const { activeConversation, processReceivedMessage, conversations, fetchConversations } = get();
         
-        // Find which conversation this belongs to
         const convId = message.conversation_id;
         
-        // Decrypt if it's for active conversation
         if (activeConversation && activeConversation.id === convId) {
           const decryptedMsg = processReceivedMessage(message, activeConversation.contact_public_key);
           set(state => ({
@@ -72,14 +76,27 @@ export const useChatStore = create((set, get) => ({
           }));
         }
 
-        // Update last message in conversations list
-        set(state => ({
-          conversations: state.conversations.map(c => 
-            c.id === convId ? { ...c, last_message: message } : c
-          )
-        }));
+        // Check if conversation exists
+        const convExists = conversations.some(c => c.id === convId);
+        if (!convExists) {
+          // If a new conversation, fetch the list to show it immediately
+          fetchConversations();
+        } else {
+          // Update last message and move to top
+          set(state => {
+            const updatedConvs = state.conversations.map(c => 
+              c.id === convId ? { ...c, last_message: message } : c
+            );
+            return {
+              conversations: updatedConvs.sort((a, b) => {
+                const bTime = b.last_message ? new Date(b.last_message.timestamp).getTime() : 0;
+                const aTime = a.last_message ? new Date(a.last_message.timestamp).getTime() : 0;
+                return bTime - aTime;
+              })
+            };
+          });
+        }
 
-        // Notification logic
         const authUser = useAuthStore.getState().user;
         if (authUser && message.sender_id !== authUser.id) {
           const isWindowFocused = document.hasFocus();
@@ -89,22 +106,35 @@ export const useChatStore = create((set, get) => ({
             const conv = get().conversations.find(c => c.id === convId);
             const senderName = conv?.contact_username || 'Someone';
             
-            // In-app visual toast
-            toast(`New message from ${senderName}`, {
-              icon: '💬',
-            });
-            // Audio ding
+            toast(`New message from ${senderName}`, { icon: '💬' });
             playNotificationSound();
             
-            // OS level notification if enabled
             if ('Notification' in window && Notification.permission === 'granted') {
-              const notification = new Notification('New Message', {
-                body: `${senderName} sent you a message`
-              });
+              const notification = new Notification('New Message', { body: `${senderName} sent you a message` });
               setTimeout(() => notification.close(), 5000);
             }
           }
         }
+      });
+
+      socket.on('message_deleted', ({ messageId, conversationId }) => {
+        set(state => ({
+          messages: state.messages.filter(m => m.id !== messageId),
+          conversations: state.conversations.map(c => {
+            if (c.id === conversationId && c.last_message?.id === messageId) {
+              return { ...c, last_message: null };
+            }
+            return c;
+          })
+        }));
+      });
+
+      socket.on('conversation_deleted', ({ conversationId }) => {
+        set(state => ({
+          conversations: state.conversations.filter(c => c.id !== conversationId),
+          activeConversation: state.activeConversation?.id === conversationId ? null : state.activeConversation,
+          messages: state.activeConversation?.id === conversationId ? [] : state.messages
+        }));
       });
 
       socket.on('typing', ({ conversationId, senderId, isTyping }) => {
@@ -253,5 +283,48 @@ export const useChatStore = create((set, get) => ({
         isTyping
       });
     }
+  },
+
+  deleteMessage: (messageId) => {
+    const { socket, activeConversation } = get();
+    if (!socket || !activeConversation) return;
+
+    socket.emit('delete_message', { 
+      messageId, 
+      conversationId: activeConversation.id,
+      receiverId: activeConversation.contact_id 
+    }, (res) => {
+      if (res.success) {
+        set(state => ({
+          messages: state.messages.filter(m => m.id !== messageId)
+        }));
+      } else {
+        toast.error('Failed to delete message');
+      }
+    });
+  },
+
+  deleteConversation: (conversationId) => {
+    const { socket, conversations } = get();
+    if (!socket) return;
+    
+    const conv = conversations.find(c => c.id === conversationId);
+    if (!conv) return;
+
+    socket.emit('delete_conversation', { 
+      conversationId, 
+      receiverId: conv.contact_id 
+    }, (res) => {
+      if (res.success) {
+        set(state => ({
+          conversations: state.conversations.filter(c => c.id !== conversationId),
+          activeConversation: state.activeConversation?.id === conversationId ? null : state.activeConversation,
+          messages: state.activeConversation?.id === conversationId ? [] : state.messages
+        }));
+        toast.success('Conversation deleted');
+      } else {
+        toast.error('Failed to delete conversation');
+      }
+    });
   }
 }));

@@ -13,8 +13,12 @@ export default function setupChatSockets(io) {
       connectedUsers.set(socket.id, userId);
       userSockets.set(userId, socket.id);
       
-      // Update online status
+      // Update online status for others
       io.emit('user_status', { userId, online: true });
+      
+      // Send current online users to the joining user
+      const onlineUserIds = Array.from(userSockets.keys());
+      socket.emit('initial_status', onlineUserIds);
     });
 
     // Start a conversation
@@ -113,6 +117,48 @@ export default function setupChatSockets(io) {
       const receiverSocketId = userSockets.get(receiverId);
       if (receiverSocketId) {
         io.to(receiverSocketId).emit('typing', { conversationId, senderId: connectedUsers.get(socket.id), isTyping });
+      }
+    });
+
+    socket.on('delete_message', async ({ messageId, conversationId, receiverId }, callback) => {
+      try {
+        const userId = connectedUsers.get(socket.id);
+        const msg = await Message.findOne({ id: messageId });
+        if (msg && msg.sender_id === userId) {
+          await Message.deleteOne({ id: messageId });
+          
+          const receiverSocketId = userSockets.get(receiverId);
+          if (receiverSocketId) {
+            io.to(receiverSocketId).emit('message_deleted', { messageId, conversationId });
+          }
+          if (callback) callback({ success: true });
+        } else {
+          if (callback) callback({ success: false, error: 'Unauthorized' });
+        }
+      } catch (err) {
+        if (callback) callback({ success: false, error: err.message });
+      }
+    });
+
+    socket.on('delete_conversation', async ({ conversationId, receiverId }, callback) => {
+      try {
+        const userId = connectedUsers.get(socket.id);
+        const conv = await Conversation.findOne({ id: conversationId });
+        
+        if (conv && conv.participants.includes(userId)) {
+          await Conversation.deleteOne({ id: conversationId });
+          await Message.deleteMany({ conversation_id: conversationId });
+          
+          const receiverSocketId = userSockets.get(receiverId);
+          if (receiverSocketId) {
+            io.to(receiverSocketId).emit('conversation_deleted', { conversationId });
+          }
+          if (callback) callback({ success: true });
+        } else {
+          if (callback) callback({ success: false, error: 'Unauthorized' });
+        }
+      } catch (err) {
+        if (callback) callback({ success: false, error: err.message });
       }
     });
 
